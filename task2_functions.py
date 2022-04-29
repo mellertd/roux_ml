@@ -84,16 +84,15 @@ def test(device, dataloader, model, loss_fn):
 
     
 @torch.no_grad()
-def explore_wrong_5x5(dataloader, model, device, class_labels=None, seed=None):
+def explore_wrong_5x5(dataloader, model, device, class_labels=None, seed=None, replace=False):
     model.eval()
     rng = default_rng(seed)
     all_wrong = torch.empty(0, dtype=torch.int64, device=device)
     preds = torch.empty(0, dtype=torch.int64, device=device)
     gtruths = torch.empty(0, dtype=torch.int64, device=device)
     for X, y in dataloader:
-        X = X.to(device)
+        X, y = X.to(device), y.to(device)
         pred = model(X).argmax(1)
-        y = y.to(device)
         wrong = pred != y
         wrong_ixs = torch.argwhere(wrong).flatten()
         for ix in wrong_ixs:
@@ -101,7 +100,7 @@ def explore_wrong_5x5(dataloader, model, device, class_labels=None, seed=None):
             preds = torch.cat((preds, torch.tensor([pred[ix]]).to(device)))
             gtruths = torch.cat((gtruths, torch.tensor([y[ix]]).to(device)))
     
-    example_ixs = rng.choice(range(len(gtruths)), 25, replace=False)
+    example_ixs = rng.choice(range(len(gtruths)), 25, replace=replace)
     
     fig, axes = plt.subplots(nrows=5, ncols=5, figsize=(14, 14))
     fig.tight_layout()
@@ -113,10 +112,11 @@ def explore_wrong_5x5(dataloader, model, device, class_labels=None, seed=None):
             true = class_labels[y]
             guess = class_labels[y_guess]
         else:
-            true = str(y)
-            guess = str(y_guess)
+            true = str(int(y))
+            guess = str(int(y_guess))
         ax = axes.flatten()[i]
         ax.set_title(f'True:{true}, Guess:{guess}')
         im = X.squeeze().cpu()
+        
         ax.imshow(im, cmap='gray')
     model.train()

@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from torchvision import transforms
-
+from numpy.random import default_rng
 
 data_transforms = {
     'train': transforms.Compose([
@@ -128,3 +128,46 @@ def visualize_model(device, dataloaders, class_names, model, num_images=6):
                     model.train(mode=was_training)
                     return
         model.train(mode=was_training)
+
+
+def explore_wrong_5x5_rgb(dataloader, model, device, class_labels=None, seed=None, replace=False):
+
+    model.eval()
+    rng = default_rng(seed)
+    all_wrong = torch.empty(0, dtype=torch.int64, device=device)
+    preds = torch.empty(0, dtype=torch.int64, device=device)
+    gtruths = torch.empty(0, dtype=torch.int64, device=device)
+    for X, y in dataloader:
+        X, y = X.to(device), y.to(device)
+        pred = model(X).argmax(1)
+        wrong = pred != y
+        wrong_ixs = torch.argwhere(wrong).flatten()
+        for ix in wrong_ixs:
+            all_wrong = torch.cat((all_wrong, X[ix, ...][None, ...]))
+            preds = torch.cat((preds, torch.tensor([pred[ix]]).to(device)))
+            gtruths = torch.cat((gtruths, torch.tensor([y[ix]]).to(device)))
+
+    example_ixs = rng.choice(range(len(gtruths)), 25, replace=replace)
+
+    fig, axes = plt.subplots(nrows=5, ncols=5, figsize=(14, 14))
+    fig.tight_layout()
+    for i, ix in enumerate(example_ixs):
+        X = all_wrong[ix]
+        y = gtruths[ix]
+        y_guess = preds[ix]
+        if class_labels:
+            true = class_labels[y]
+            guess = class_labels[y_guess]
+        else:
+            true = str(int(y))
+            guess = str(int(y_guess))
+        ax = axes.flatten()[i]
+        ax.set_title(f'True:{true}, Guess:{guess}')
+        im = X.squeeze().cpu().numpy()
+        im = np.moveaxis(im, 0, -1)
+        mean = np.array([0.485, 0.456, 0.406])
+        std = np.array([0.229, 0.224, 0.225])
+        im = std * im + mean
+        im = np.clip(im, 0, 1)
+        ax.imshow(im)
+    model.train()
